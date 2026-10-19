@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f0f2f5;
+            padding: 20px;
+        }
+        #success-banner {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #28a745;
+            color: #fff;
+            text-align: center;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 500;
+            z-index: 1000;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+        #success-banner.fade-out {
+            opacity: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 {
+            margin-bottom: 24px;
+            color: #333;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            margin-bottom: 16px;
+            font-size: 20px;
+            color: #333;
+        }
+        .form-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        .form-group input {
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            flex: 1 1 200px;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #28a745;
+            box-shadow: 0 0 0 2px rgba(40,167,69,0.2);
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .btn-green {
+            background: #28a745;
+            color: #fff;
+        }
+        .btn-green:hover {
+            background: #218838;
+        }
+        .btn-red {
+            background: #dc3545;
+            color: #fff;
+        }
+        .btn-red:hover {
+            background: #c82333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 14px;
+        }
+        th {
+            font-weight: 600;
+            color: #555;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .empty-message {
+            text-align: center;
+            color: #999;
+            padding: 32px;
+            font-size: 14px;
+        }
+        .sql-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 4px;
+            font-family: "Consolas", "Courier New", monospace;
+            font-size: 14px;
+            margin-bottom: 12px;
+            overflow-x: auto;
+        }
+        .sql-keyword {
+            color: #569cd6;
+        }
+        .sql-result {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: "Consolas", "Courier New", monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="success-banner"></div>
+    <div class="container">
+        <h1>User Management</h1>
+        <div class="card">
+            <h2>Create User</h2>
+            <div class="form-group">
+                <input type="text" id="username-input" placeholder="Username" required>
+                <input type="email" id="email-input" placeholder="Email" required>
+                <button class="btn btn-green" onclick="createUser()">Create User</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2>User List</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Created At</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="user-table-body">
+                    <tr>
+                        <td colspan="5" class="empty-message">No users found.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="card">
+            <h2>SQL Console</h2>
+            <div class="sql-box">
+                <span class="sql-keyword">SELECT</span> * <span class="sql-keyword">FROM</span> users
+            </div>
+            <button class="btn btn-green" onclick="runSqlQuery()" style="margin-bottom:12px">Run Query</button>
+            <div id="sql-result" class="sql-result">Click "Run Query" to execute.</div>
+        </div>
+    </div>
+    <script>
+        const API_BASE = '/api/users';
+
+        async function loadUsers() {
+            try {
+                const res = await fetch(API_BASE);
+                const users = await res.json();
+                const tbody = document.getElementById('user-table-body');
+                if (users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-message">No users found.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = users.map(user => `
+                    <tr>
+                        <td>${user.id}</td>
+                        <td>${escapeHtml(user.username)}</td>
+                        <td>${escapeHtml(user.email)}</td>
+                        <td>${formatDate(user.createdAt)}</td>
+                        <td><button class="btn btn-red" onclick="deleteUser(${user.id})">Delete</button></td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load users:', err);
+            }
+        }
+
+        async function createUser() {
+            const username = document.getElementById('username-input').value.trim();
+            const email = document.getElementById('email-input').value.trim();
+            if (!username || !email) {
+                alert('Please fill in both fields.');
+                return;
+            }
+            try {
+                const res = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert('Error: ' + (err.message || 'Failed to create user'));
+                    return;
+                }
+                document.getElementById('username-input').value = '';
+                document.getElementById('email-input').value = '';
+                loadUsers();
+            } catch (err) {
+                alert('Failed to create user.');
+            }
+        }
+
+        async function deleteUser(id) {
+            try {
+                const res = await fetch(API_BASE + '/' + id, { method: 'DELETE' });
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert('Error: ' + (err.message || 'Failed to delete user'));
+                    return;
+                }
+                showSuccessMessage('User with ID ' + id + ' has been successfully deleted.');
+                loadUsers();
+            } catch (err) {
+                alert('Failed to delete user.');
+            }
+        }
+
+        function showSuccessMessage(message) {
+            const banner = document.getElementById('success-banner');
+            banner.textContent = message;
+            banner.style.display = 'block';
+            banner.classList.remove('fade-out');
+            setTimeout(function() {
+                banner.classList.add('fade-out');
+                setTimeout(function() {
+                    banner.style.display = 'none';
+                }, 500);
+            }, 3000);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleString();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function runSqlQuery() {
+            const resultDiv = document.getElementById('sql-result');
+            try {
+                const res = await fetch(API_BASE + '/sql');
+                const data = await res.json();
+                resultDiv.textContent = '> ' + data.query + '\n\n' + JSON.stringify(data.results, null, 2);
+            } catch (err) {
+                resultDiv.textContent = 'Error: ' + err.message;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadUsers);
+    </script>
+</body>
+</html>
